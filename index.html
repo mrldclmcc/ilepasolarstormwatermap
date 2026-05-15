@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IL CGP Permit Map</title>
+  <title>IL Solar EPA Stormwater Permit Map</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
@@ -469,7 +469,7 @@
 
 <body>
   <header>
-    <h1>Illinois CGP Permit Map</h1>
+    <h1>Illinois Solar EPA Stormwater Permit Map</h1>
     <span>EPA ePermit Search</span>
   </header>
 
@@ -530,7 +530,10 @@
         </div>
         <div class="status-bar" id="statusBar">Enter search criteria and click Search.</div>
         <button class="btn btn-primary" id="searchBtn">Search</button>
-        <button class="btn btn-secondary" id="exportBtn" disabled>Export JSON</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn btn-secondary" id="exportBtn" disabled>Export JSON</button>
+          <button class="btn btn-secondary" id="copyLinkBtn">Copy link</button>
+        </div>
       </div>
     </aside>
 
@@ -976,6 +979,124 @@
     panel.classList.toggle('open');
     panelToggle.textContent = panel.classList.contains('open') ? '✕ Close' : '☰ Search';
   });
-  </script>
+
+  // ── Default dates: today → +2 years ───────────────────────────────────────
+  function isoDate(d) { return d.toISOString().substring(0, 10); }
+
+  function applyDefaultDates() {
+    var today   = new Date();
+    var twoYears = new Date(today);
+    twoYears.setFullYear(twoYears.getFullYear() + 2);
+    document.getElementById('startFrom').value = isoDate(today);
+    document.getElementById('startTo').value   = isoDate(twoYears);
+  }
+
+  // ── URL state ──────────────────────────────────────────────────────────────
+  // Encodes current form state into the URL query string (no page reload).
+  // Recipient opens the URL → form pre-fills → search auto-runs.
+
+  function readFormState() {
+    return {
+      keyword:    document.getElementById('keyword').value.trim(),
+      operator:   document.getElementById('operator').value.trim(),
+      startFrom:  document.getElementById('startFrom').value,
+      startTo:    document.getElementById('startTo').value,
+      endFrom:    document.getElementById('endFrom').value,
+      endTo:      document.getElementById('endTo').value,
+      counties:   Array.from(document.querySelectorAll('.county-cb:checked')).map(function(cb) { return cb.value; })
+    };
+  }
+
+  function applyFormState(state) {
+    if (state.keyword   !== undefined) document.getElementById('keyword').value   = state.keyword;
+    if (state.operator  !== undefined) document.getElementById('operator').value  = state.operator;
+    if (state.startFrom !== undefined) document.getElementById('startFrom').value = state.startFrom;
+    if (state.startTo   !== undefined) document.getElementById('startTo').value   = state.startTo;
+    if (state.endFrom   !== undefined) document.getElementById('endFrom').value   = state.endFrom;
+    if (state.endTo     !== undefined) document.getElementById('endTo').value     = state.endTo;
+    if (Array.isArray(state.counties)) {
+      var set = {};
+      state.counties.forEach(function(c) { set[c] = true; });
+      document.querySelectorAll('.county-cb').forEach(function(cb) {
+        cb.checked = !!set[cb.value];
+      });
+    }
+  }
+
+  function stateToParams(state) {
+    var p = new URLSearchParams();
+    if (state.keyword)   p.set('q',  state.keyword);
+    if (state.operator)  p.set('op', state.operator);
+    if (state.startFrom) p.set('sf', state.startFrom);
+    if (state.startTo)   p.set('st', state.startTo);
+    if (state.endFrom)   p.set('ef', state.endFrom);
+    if (state.endTo)     p.set('et', state.endTo);
+    // Only encode counties if not all 9 selected (keeps URL short in the default case)
+    var allNames = COUNTIES.map(function(c) { return c.name; });
+    var missing = allNames.filter(function(n) { return state.counties.indexOf(n) === -1; });
+    if (missing.length > 0) p.set('c', state.counties.join(','));
+    return p;
+  }
+
+  function paramsToState(p) {
+    var state = {};
+    if (p.has('q'))  state.keyword   = p.get('q');
+    if (p.has('op')) state.operator  = p.get('op');
+    if (p.has('sf')) state.startFrom = p.get('sf');
+    if (p.has('st')) state.startTo   = p.get('st');
+    if (p.has('ef')) state.endFrom   = p.get('ef');
+    if (p.has('et')) state.endTo     = p.get('et');
+    if (p.has('c'))  state.counties  = p.get('c').split(',').map(function(s) { return s.trim(); });
+    else             state.counties  = COUNTIES.map(function(c) { return c.name; }); // default: all
+    return state;
+  }
+
+  function pushStateToURL(state) {
+    var params = stateToParams(state);
+    var newUrl = window.location.pathname + '?' + params.toString();
+    window.history.replaceState(null, '', newUrl);
+  }
+
+  // ── Copy link button ───────────────────────────────────────────────────────
+  document.getElementById('copyLinkBtn').addEventListener('click', function() {
+    var state = readFormState();
+    pushStateToURL(state);
+    var fullUrl = window.location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullUrl).then(function() {
+        setStatus('Link copied to clipboard!', false);
+        setTimeout(function() { setStatus('', false); }, 2500);
+      });
+    } else {
+      // Fallback for older browsers
+      var ta = document.createElement('textarea');
+      ta.value = fullUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setStatus('Link copied to clipboard!', false);
+      setTimeout(function() { setStatus('', false); }, 2500);
+    }
+  });
+
+  // ── Init: load URL params, apply defaults, auto-search if params present ──
+  (function init() {
+    var params  = new URLSearchParams(window.location.search);
+    var hasState = params.toString().length > 0;
+
+    if (hasState) {
+      applyFormState(paramsToState(params));
+    } else {
+      applyDefaultDates();
+    }
+
+    if (hasState) {
+      // Small delay so Leaflet finishes initialising before we pan/zoom
+      setTimeout(function() { searchBtn.click(); }, 300);
+    }
+  })();</script>
 </body>
 </html>
