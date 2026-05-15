@@ -557,7 +557,7 @@
 
   <script>
   // ── CONFIG ── Replace with your deployed GAS Web App URL ──────────────────
-  var GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxH4yYPXtTgVFZOXgr_urpSXgxGSrOz6pXWXh-WGiKsKdSLY99fcFp1aTPv2-E_XABa/exec';
+  var GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxo16S_E-m37sBMHlX11OLa3bMjiksSKAt8FgiDNVwlR1P7PcWKuXDzTOFP5h2DC3Vm/exec';
   // ──────────────────────────────────────────────────────────────────────────
 
   var COUNTIES = [
@@ -828,6 +828,41 @@
     progressB.style.width = '0%';
   }
 
+  // ── JSONP helper ───────────────────────────────────────────────────────────
+  var _jsonpCounter = 0;
+  function jsonp(url, params, onSuccess, onError) {
+    var cbName = '__gasProxy_' + (++_jsonpCounter);
+    var timeout;
+
+    window[cbName] = function(data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      if (data.error) { onError(data.error); } else { onSuccess(data); }
+    };
+
+    var qs = Object.keys(params).map(function(k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+
+    var script = document.createElement('script');
+    script.src = url + '?' + qs + '&callback=' + cbName;
+    script.onerror = function() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      onError('Script load error');
+    };
+
+    timeout = setTimeout(function() {
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      onError('Timeout');
+    }, 60000);
+
+    document.head.appendChild(script);
+  }
+
   searchBtn.addEventListener('click', function() {
     var selectedCounties = Array.from(document.querySelectorAll('.county-cb:checked')).map(function(cb) { return cb.value; });
     if (selectedCounties.length === 0) {
@@ -845,11 +880,11 @@
     setStatus('Searching…', false);
     setProgress(10);
 
-    // One request per county (API filters by a single county at a time)
     var total    = selectedCounties.length;
     var done     = 0;
     var combined = [];
     var errors   = 0;
+    var anyCapped = false;
 
     selectedCounties.forEach(function(county) {
       var criteria = {
@@ -873,53 +908,53 @@
         filter:           ''
       };
 
-      fetch(GAS_PROXY_URL, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ criteria: criteria })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.error) {
-          errors++;
-        } else {
+      jsonp(
+        GAS_PROXY_URL,
+        { criteria: JSON.stringify(criteria) },
+        function(data) {
           combined = combined.concat(data.records || []);
+          if (data.capped) anyCapped = true;
+          finalize();
+        },
+        function(err) {
+          errors++;
+          finalize();
         }
-      })
-      .catch(function() { errors++; })
-      .finally(function() {
-        done++;
-        setProgress(10 + Math.round((done / total) * 80));
-
-        if (done === total) {
-          // Client-side date filter
-          var filtered = combined.filter(passesDateFilter);
-
-          // De-duplicate by id
-          var seen = {};
-          filtered = filtered.filter(function(r) {
-            if (seen[r.id]) return false;
-            seen[r.id] = true;
-            return true;
-          });
-
-          allData = filtered;
-          renderMarkers(allData);
-          setProgress(100);
-
-          setTimeout(function() {
-            clearProgress();
-            var msg = allData.length + ' permit' + (allData.length !== 1 ? 's' : '') + ' mapped';
-            if (errors > 0) msg += ' (' + errors + ' county request' + (errors > 1 ? 's' : '') + ' failed)';
-            if (data && data.capped) msg += ' · results capped at 200/county';
-            setStatus(msg, errors > 0);
-          }, 400);
-
-          searchBtn.disabled = false;
-          exportBtn.disabled = allData.length === 0;
-        }
-      });
+      );
     });
+
+    function finalize() {
+      done++;
+      setProgress(10 + Math.round((done / total) * 80));
+
+      if (done < total) return;
+
+      // Client-side date filter
+      var filtered = combined.filter(passesDateFilter);
+
+      // De-duplicate by id
+      var seen = {};
+      filtered = filtered.filter(function(r) {
+        if (seen[r.id]) return false;
+        seen[r.id] = true;
+        return true;
+      });
+
+      allData = filtered;
+      renderMarkers(allData);
+      setProgress(100);
+
+      setTimeout(function() {
+        clearProgress();
+        var msg = allData.length + ' permit' + (allData.length !== 1 ? 's' : '') + ' mapped';
+        if (errors > 0) msg += ' (' + errors + ' county request' + (errors > 1 ? 's' : '') + ' failed)';
+        if (anyCapped) msg += ' · some counties capped at 200';
+        setStatus(msg, errors > 0);
+      }, 400);
+
+      searchBtn.disabled = false;
+      exportBtn.disabled = allData.length === 0;
+    }
   });
 
   // ── Export ─────────────────────────────────────────────────────────────────
