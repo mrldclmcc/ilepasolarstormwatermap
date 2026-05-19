@@ -629,6 +629,17 @@
     return countyColorMap[(countyStr + '').toUpperCase()] || '#888';
   }
 
+  // ── Acreage → Circle radius (meters) ────────────────────────────────────────
+function acresToRadius(acres) {
+  if (!acres || acres <= 0) return 0;
+  // 1 acre = 4046.86 m²; circle area = πr² → r = √(area/π)
+  var areaM2 = acres * 4046.86;
+  var radiusM = Math.sqrt(areaM2 / Math.PI);
+  // Scale factor for visual clarity (adjust as needed)
+  // Also cap max radius to avoid overwhelming the map
+  return Math.min(radiusM * 0.6, 300); // max ~300m visual radius
+}  
+
   // ── Date helpers ───────────────────────────────────────────────────────────
   function parseDate(str) {
     if (!str) return null;
@@ -772,42 +783,60 @@
     if (e.target === this) this.classList.remove('open');
   });
 
-  // ── Render markers ─────────────────────────────────────────────────────────
-  function renderMarkers(records) {
-    markersLayer.clearLayers();
-    var bounds = [];
+  // ── Render markers + acreage circles ────────────────────────────────────────
+function renderMarkers(records) {
+  markersLayer.clearLayers();
+  var bounds = [];
 
-    records.forEach(function(rec) {
-      var info = rec.projectSiteInformation || {};
-      var loc  = info.siteLocation || {};
-      var addr = info.siteAddress  || {};
-      var lat  = parseFloat(loc.latitude);
-      var lng  = parseFloat(loc.longitude);
+  records.forEach(function(rec) {
+    var info = rec.projectSiteInformation || {};
+    var loc  = info.siteLocation || {};
+    var addr = info.siteAddress  || {};
+    var lat  = parseFloat(loc.latitude);
+    var lng  = parseFloat(loc.longitude);
 
-      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
 
-      var county = addr.county || '';
-      var color  = colorForCounty(county);
-      var icon   = makeIcon(color);
+    var county = addr.county || '';
+    var color  = colorForCounty(county);
+    var acres  = info.siteAreaDisturbed;
+    var radius = acresToRadius(acres);
 
-      var marker = L.marker([lat, lng], { icon: icon });
-
-      // Tooltip on hover
-      marker.bindTooltip(
-        '<div class="tip-name">' + (info.siteName || rec.npdesId || '') + '</div>' +
-        '<div class="tip-meta">' + county + (county ? ' Co. · ' : '') + (rec.npdesId || '') + '</div>',
-        { className: 'permit-tip', sticky: true, offset: [12, 0] }
-      );
-
-      marker.on('click', function() { openModal(rec); });
-      marker.addTo(markersLayer);
-      bounds.push([lat, lng]);
-    });
-
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    // ── Draw acreage circle (if we have valid acreage) ──
+    if (radius > 0) {
+      var circle = L.circle([lat, lng], {
+        radius: radius,
+        color: color,
+        weight: 2,
+        opacity: 0.7,
+        fillColor: color,
+        fillOpacity: 0.15,
+        interactive: false // clicks pass through to marker
+      });
+      circle.addTo(markersLayer);
     }
+
+    // ── Draw pin marker (unchanged) ──
+    var icon = makeIcon(color);
+    var marker = L.marker([lat, lng], { icon: icon });
+
+    // Tooltip on hover - now includes acreage
+    var tipAcres = acres != null ? ' · ' + acres + ' ac' : '';
+    marker.bindTooltip(
+      '<div class="tip-name">' + (info.siteName || rec.npdesId || '') + '</div>' +
+      '<div class="tip-meta">' + county + (county ? ' Co. · ' : '') + (rec.npdesId || '') + tipAcres + '</div>',
+      { className: 'permit-tip', sticky: true, offset: [12, 0] }
+    );
+
+    marker.on('click', function() { openModal(rec); });
+    marker.addTo(markersLayer);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
   }
+}
 
   // ── Search ─────────────────────────────────────────────────────────────────
   var searchBtn  = document.getElementById('searchBtn');
