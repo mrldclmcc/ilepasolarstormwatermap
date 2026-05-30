@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPDES Permit Report Generator v3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --blue: #1a56db;
+    --blue-light: #e8f0fe;
+    --blue-mid: #3b73d1;
+    --orange: #e8610a;
+    --orange-light: #fff3eb;
+    --bg: #f7f8fc;
+    --surface: #ffffff;
+    --border: #dde3ed;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --radius: 8px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+  }
+
+  [data-dark] {
+    --blue: #5b8ef0;
+    --blue-light: #1e2d52;
+    --blue-mid: #7aaaf7;
+    --orange: #f5823a;
+    --orange-light: #2d1d0f;
+    --bg: #111827;
+    --surface: #1f2937;
+    --border: #374151;
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-muted: #6b7280;
+    --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: var(--blue);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .logo-mark svg { width: 16px; height: 16px; fill: white; }
+
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+
+  .btn-icon {
+    background: none; border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 36px; height: 36px;
+    cursor: pointer; color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .btn-icon:hover { background: var(--bg); color: var(--text-primary); }
+
+  /* ── MAIN LAYOUT ── */
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ── SOURCE ZONES ── */
+  .source-section { margin-bottom: 24px; }
+
+  .upload-zone, .fetch-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+    transition: all 0.2s;
+    background: var(--surface);
+  }
+  .fetch-zone { text-align: left; }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--blue);
+    background: var(--blue-light);
+  }
+
+  .upload-zone input[type="file"] { display: none; }
+  .upload-trigger {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .upload-icon {
+    width: 48px; height: 48px;
+    background: var(--blue-light);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .upload-icon svg { width: 24px; height: 24px; stroke: var(--blue); fill: none; stroke-width: 2; }
+
+  .upload-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .upload-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+
+  .file-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue-light); color: var(--blue);
+    border-radius: 20px; padding: 6px 14px;
+    font-size: 13px; font-weight: 500;
+    margin-top: 12px;
+  }
+
+  /* ── Fetch Form Fields ── */
+  .fetch-form {
+    display: grid; gap: 16px; margin-top: 8px; text-align: left;
+  }
+
+  .form-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  .form-group label {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .form-group input[type="text"],
+  .form-group input[type="date"],
+  .form-group input[type="number"],
+  .form-group select {
+    padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-family: var(--sans);
+    font-size: 13px; color: var(--text-primary);
+    background: var(--surface); outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--blue);
+  }
+
+  .checkbox-group {
+    display: flex; flex-wrap: wrap; gap: 8px 16px;
+    margin-top: 4px;
+  }
+  .checkbox-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .checkbox-item input[type="checkbox"] {
+    accent-color: var(--blue); width: 14px; height: 14px;
+  }
+
+  .county-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    margin-top: 4px;
+  }
+  .county-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-secondary);
+  }
+
+  .fetch-actions {
+    display: flex; gap: 10px; margin-top: 8px; justify-content: flex-end;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: none; border-radius: var(--radius);
+    padding: 10px 18px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; font-family: var(--sans);
+    text-decoration: none;
+  }
+
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:hover { background: var(--blue-mid); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface); color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--bg); }
+
+  .btn-orange { background: var(--orange); color: white; }
+  .btn-orange:hover { opacity: 0.9; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ── STATUS & PROGRESS ── */
+  .status-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-top: 16px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .status-bar.visible { display: flex; }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--orange); flex-shrink: 0;
+  }
+  .status-dot.success { background: #16a34a; }
+  .status-dot.error { background: #dc2626; }
+  .status-dot.loading { background: var(--blue); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .progress-wrap {
+    height: 3px; background: var(--border);
+    border-radius: 99px; overflow: hidden;
+    margin-top: 12px; display: none;
+  }
+  .progress-wrap.active { display: block; }
+  .progress-bar {
+    height: 100%; background: var(--blue);
+    border-radius: 99px; transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* ── STATS STRIP ── */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .stat-label { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 600; color: var(--blue); font-family: var(--mono); }
+
+  /* ── FILTERS ── */
+  .filter-controls {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; margin-bottom: 24px;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-group label { font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+  .filter-group input[type="checkbox"] { accent-color: var(--blue); }
+  .filter-group input[type="date"],
+  .filter-group input[type="number"] {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text-primary); padding: 6px 10px; border-radius: 4px;
+    font-family: var(--sans); font-size: 13px; width: 110px;
+  }
+  .filter-separator { width: 1px; height: 24px; background: var(--border); }
+
+  .generate-section {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;
+  }
+
+  /* ── OUTPUT AREA ── */
+  .output-section { display: none; }
+  .output-section.visible { display: block; }
+
+  .output-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+  }
+  .output-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+  .output-actions { display: flex; gap: 8px; }
+
+  .output-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  #report-output {
+    width: 100%; min-height: 480px; max-height: 70vh;
+    padding: 20px 24px; font-family: var(--mono);
+    font-size: 12.5px; line-height: 1.7;
+    color: var(--text-primary); background: transparent;
+    border: none; resize: vertical; outline: none;
+    overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;
+    display: block;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #111827; color: white;
+    padding: 10px 18px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.2s; pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .empty-hero {
+    text-align: center; padding: 60px 24px; color: var(--text-muted);
+  }
+  .empty-hero h2 { font-size: 20px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+  .empty-hero p { font-size: 14px; line-height: 1.6; }
+
+  .wordmark {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  @media (max-width: 600px) {
+    main { padding: 24px 16px 60px; }
+    header { padding: 0 16px; }
+    .upload-zone, .fetch-zone { padding: 24px 16px; }
+    .output-toolbar { flex-direction: column; align-items: flex-start; }
+    .generate-section, .filter-controls { flex-direction: column; align-items: flex-start; }
+    .filter-group { width: 100%; justify-content: space-between; }
+    .form-row { grid-template-columns: 1fr; }
+    .county-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 16 16"><path d="M2 3h12v2H2zM2 7h8v2H2zM2 11h10v2H2z"/></svg>
+    </div>
+    NPDES Report Generator <span style="font-size:0.55em; color:var(--text-muted)">v3</span>
+  </div>
+  <div class="header-actions">
+    <span class="wordmark">CGP / Illinois</span>
+    <button class="btn-icon" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- Fetch from EPA API (Always Visible) -->
+  <section class="source-section">
+    <div class="fetch-zone">
+      <div class="upload-title" style="text-align:center">Fetch Permits from EPA API</div>
+      <div class="upload-sub" style="text-align:center; margin-bottom: 20px;">Query the EPA ePermit database directly</div>
+
+      <form class="fetch-form" id="fetch-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="fetch-keyword">Site name keyword</label>
+            <input type="text" id="fetch-keyword" placeholder="e.g. solar" value="solar">
+          </div>
+          <div class="form-group">
+            <label for="fetch-operator">Operator name</label>
+            <input type="text" id="fetch-operator" placeholder="Optional">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Project start date range</label>
+            <div style="display:flex;gap:8px">
+              <input type="date" id="fetch-startFrom" title="From">
+              <input type="date" id="fetch-startTo" title="To">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Project end date range</label>
+            <div style="display:flex;gap:8px">
+              <input type="date" id="fetch-endFrom" title="From">
+              <input type="date" id="fetch-endTo" title="To">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Submitted date range</label>
+            <div style="display:flex;gap:8px">
+              <input type="date" id="fetch-submittedFrom" title="From">
+              <input type="date" id="fetch-submittedTo" title="To">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Minimum acres disturbed</label>
+            <input type="number" id="fetch-minAcres" placeholder="0" min="0" step="0.1" value="0">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Counties</label>
+            <div class="county-grid" id="countyGrid"></div>
+          </div>
+          <div class="form-group">
+            <label>Filters</label>
+            <div class="checkbox-group" style="flex-direction:column; align-items:flex-start;">
+              <label class="checkbox-item"><input type="checkbox" id="fetch-status-active" value="Active" checked> Active</label>
+              <label class="checkbox-item"><input type="checkbox" id="fetch-status-pending" value="Pending" checked> Pending</label>
+              <label class="checkbox-item"><input type="checkbox" id="fetch-status-terminated" value="Terminated"> Terminated</label>
+              <label class="checkbox-item"><input type="checkbox" id="fetch-status-expired" value="Expired"> Expired</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="fetch-actions">
+          <button type="button" class="btn btn-secondary" id="fetch-clear">Clear</button>
+          <button type="button" class="btn btn-primary" id="fetch-btn">Fetch Permits</button>
+        </div>
+      </form>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="status-bar" id="fetch-status"><div class="status-dot"></div><span></span></div>
+    </div>
+  </section>
+
+  <!-- Upload JSON File -->
+  <section class="source-section">
+    <div class="upload-zone" id="drop-zone">
+      <label class="upload-trigger">
+        <div class="upload-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="upload-title">Or Upload a JSON File</div>
+        <div class="upload-sub">Drop your permit export here or click to browse</div>
+        <div id="file-name-badge" style="display:none" class="file-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="file-name-text"></span>
+        </div>
+      </label>
+      <input type="file" accept=".json" id="file-input">
+    </div>
+  </section>
+
+  <!-- Global Status -->
+  <div class="status-bar" id="status-bar"><div class="status-dot"></div><span></span></div>
+
+  <!-- Stats strip -->
+  <div class="stats-strip" id="stats-strip" style="display:none">
+    <div class="stat-card">
+      <div class="stat-label">Total Permits</div>
+      <div class="stat-value" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Territories</div>
+      <div class="stat-value" id="stat-locals">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Acres</div>
+      <div class="stat-value" id="stat-acres">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Shovel-Ready</div>
+      <div class="stat-value" id="stat-ready">—</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-controls" id="filter-controls" style="display:none">
+    <div class="filter-group">
+      <input type="checkbox" id="include-docs" checked>
+      <label for="include-docs">Include attached documents</label>
+    </div>
+    <div class="filter-separator"></div>
+    <div class="filter-group">
+      <input type="checkbox" id="include-tbd" checked>
+      <label for="include-tbd">Include TBD operators</label>
+    </div>
+    <div class="filter-separator"></div>
+    <div class="filter-group">
+      <label for="start-date">Start:</label>
+      <input type="date" id="start-date">
+      <label for="end-date" style="margin-left:8px">End:</label>
+      <input type="date" id="end-date">
+      <button class="btn-secondary btn-sm" id="clear-dates">Clear</button>
+    </div>
+    <div class="filter-separator"></div>
+    <div class="filter-group">
+      <label for="labor-heuristic">Labor hrs/acre:</label>
+      <input type="number" id="labor-heuristic" value="150" min="50" max="500" step="10" style="width:70px">
+    </div>
+  </div>
+
+  <!-- Generate button -->
+  <div class="generate-section" id="generate-section" style="display:none">
+    <button class="btn btn-primary" id="generate-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Generate Report
+    </button>
+    <button class="btn btn-secondary" id="clear-btn">Clear All</button>
+  </div>
+
+  <!-- Output -->
+  <section class="output-section" id="output-section">
+    <div class="output-toolbar">
+      <span class="output-title">Markdown Report</span>
+      <div class="output-actions">
+        <button class="btn btn-secondary" id="copy-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+        <button class="btn btn-orange" id="download-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download .md
+        </button>
+      </div>
+    </div>
+    <div class="output-box">
+      <textarea id="report-output" spellcheck="false" readonly></textarea>
+    </div>
+  </section>
+
+  <div class="empty-hero" id="empty-hero">
+    <h2>Ready to process permit data</h2>
+    <p>Fetch from the EPA API or upload a JSON export to generate<br>a territory-organized Markdown report.</p>
+  </div>
+</main>
+
+<div class="toast" id="toast">Copied to clipboard</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ══════════════════════════════════════════════════════════════════
+const GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxo16S_E-m37sBMHlX11OLa3bMjiksSKAt8FgiDNVwlR1P7PcWKuXDzTOFP5h2DC3Vm/exec';
+const TERRITORIES_URL = 'https://mrldclmcc.github.io/local-mapper2/localsmap.txt';
+const EPA_ATTACHMENT_BASE = 'https://permitsearch.epa.gov/epermit-search/api/public/v1/cgp/download/form';
+const COUNTIES = ['Boone','Cook','DuPage','Grundy','Kane','Kendall','McHenry','Lake','Will'];
+
+// ══════════════════════════════════════════════════════════════════
+// TERRITORY GEOJSON & POINT-IN-POLYGON
+// ══════════════════════════════════════════════════════════════════
+let TERRITORIES = null;
+
+async function loadTerritories() {
+  if (TERRITORIES) return TERRITORIES;
+  try {
+    const res = await fetch(TERRITORIES_URL);
+    const geojson = await res.json();
+    TERRITORIES = geojson.features.map(f => ({
+      name: f.properties.name,
+      polygons: f.geometry.coordinates.map(mp => 
+        mp.map(ring => ring.map(coord => [coord[0], coord[1]]))
+      )
+    }));
+    return TERRITORIES;
+  } catch (err) {
+    console.warn('Failed to load territories:', err);
+    return null;
+  }
+}
+
+function pointInPolygon([lng, lat], polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function assignTerritory(lat, lng) {
+  if (!lat || !lng || !TERRITORIES) return null;
+  const point = [lng, lat];
+  for (const territory of TERRITORIES) {
+    for (const polygon of territory.polygons) {
+      for (const ring of polygon) {
+        if (pointInPolygon(point, ring)) return territory.name;
+      }
+    }
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// JSONP HELPER
+// ══════════════════════════════════════════════════════════════════
+var _jsonpCounter = 0;
+function jsonp(url, params, onSuccess, onError) {
+  var cbName = '__gasProxy_' + (++_jsonpCounter);
+  var timeout;
+
+  window[cbName] = function(data) {
+    clearTimeout(timeout);
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+    if (data && data.error) { onError(data.error); } else { onSuccess(data); }
+  };
+
+  var qs = Object.keys(params).map(function(k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+
+  var script = document.createElement('script');
+  script.src = url + '?' + qs + '&callback=' + cbName;
+  script.onerror = function() {
+    clearTimeout(timeout);
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+    onError('Network error');
+  };
+
+  timeout = setTimeout(function() {
+    delete window[cbName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+    onError('Request timeout');
+  }, 45000);
+
+  document.head.appendChild(script);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ══════════════════════════════════════════════════════════════════
+const STATUS_MAP = {
+  'PaymentRequired': 'Payment Required',
+  'Active': 'Active',
+  'Terminated': 'Terminated',
+  'Expired': 'Expired',
+  'Pending': 'Pending',
+  'Withdrawn': 'Withdrawn',
+  'Rejected': 'Rejected',
+  'Closed': 'Closed',
+  'Draft': 'Draft',
+  'UnderReview': 'Under Review',
+  'PendingInteragencyReview': 'Pending Interagency Review'
+};
+
+const COVERAGE_STATUS_MAP = { 'Active': 'Active', 'Inactive': 'Inactive', 'Terminated': 'Terminated', 'Expired': 'Expired' };
+const COVERAGE_TYPE_MAP = { 'General_Permit': 'General Permit', 'Individual_Permit': 'Individual Permit' };
+const SUBMISSION_TYPE_MAP = { 'New': 'New', 'Renewal': 'Renewal', 'Amendment': 'Amendment', 'Termination': 'Termination', 'Transfer': 'Transfer', 'Change': 'Change' };
+const ATTACHMENT_CATEGORY_MAP = { 'ZIP': 'ZIP Archive', 'COR': 'Copy of Record', 'STORMWATER': 'Stormwater Plan', 'HISTORIC_PRESERVATION': 'Historic Preservation', 'ECOCAT_APPROVAL': 'EcoCAT Approval', 'OTHER': 'Other' };
+
+function humanStatus(val, map) { return !val ? null : (map[val] || val); }
+function formatDate(str) { if (!str) return null; try { return new Date(str.substring(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return str; } }
+function formatDateShort(str) { if (!str) return null; try { return new Date(str.substring(0, 10) + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); } catch { return str; } }
+function formatAcres(val) { return val != null ? Number(val).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' acres' : null; }
+function formatFileSize(bytes) { if (!bytes) return null; return bytes < 1024 ? bytes + ' B' : bytes < 1048576 ? (bytes / 1024).toFixed(1) + ' KB' : (bytes / 1048576).toFixed(1) + ' MB'; }
+
+function formatAddress(addr) {
+  if (!addr) return null;
+  const parts = [addr.address1, addr.address2, addr.address3, addr.address4].filter(Boolean);
+  const cityLine = [addr.city, addr.stateCode, addr.zipCode].filter(Boolean).join(', ');
+  if (cityLine) parts.push(cityLine);
+  return parts.length ? parts.join(', ') : null;
+}
+
+function parseDateInput(str) { return !str ? null : new Date(str + 'T00:00:00Z'); }
+function isTBDOperator(op) { return !op ? false : /^\s*(t\.?\s*b\.?\s*d\.?|to\s+be\s+determined)\s*$/i.test(op.trim()); }
+function isShovelReady(p) { return p.coverageStatus === 'Active' && p.attachments?.some(a => a.category === 'STORMWATER') && p.attachments?.some(a => a.category === 'ECOCAT_APPROVAL'); }
+
+function getTimelineData(permits) {
+  const t = {};
+  for (const p of permits) {
+    const s = p.projectSiteInformation?.siteProjectStart;
+    if (!s) continue;
+    const k = s.substring(0, 7);
+    if (!t[k]) t[k] = { permits: 0, acres: 0 };
+    t[k].permits++;
+    t[k].acres += p.projectSiteInformation?.siteAreaDisturbed || 0;
+  }
+  return Object.entries(t).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function getOperatorStats(permits) {
+  const s = {};
+  for (const p of permits) {
+    const n = p.operatorInformation?.operatorName || 'Unknown';
+    if (!s[n]) s[n] = { permits: 0, acres: 0, counties: new Set() };
+    s[n].permits++;
+    s[n].acres += p.projectSiteInformation?.siteAreaDisturbed || 0;
+    s[n].counties.add(p.projectSiteInformation?.siteAddress?.county || 'Unknown');
+  }
+  return Object.entries(s).map(([k, v]) => ({ name: k, ...v, counties: Array.from(v.counties) })).sort((a, b) => b.permits - a.permits);
+}
+
+function getContacts(permits) {
+  const c = new Map();
+  for (const p of permits) {
+    const op = p.operatorInformation, poc = op?.operatorPointOfContact;
+    if (!poc?.email) continue;
+    const key = op.operatorName;
+    if (!c.has(key)) {
+      c.set(key, { name: op.operatorName, contact: [poc.firstName, poc.lastName].join(' ').trim(), title: poc.title, phone: poc.phone, email: poc.email, address: formatAddress(op.operatorAddress), counties: new Set() });
+    }
+    const county = p.projectSiteInformation?.siteAddress?.county;
+    if (county) c.get(key).counties.add(county);
+  }
+  return Array.from(c.values()).map(x => ({ ...x, counties: Array.from(x.counties) }));
+}
+
+function getLaborByLocalMonth(permits, hpa) {
+  const r = {};
+  for (const p of permits) {
+    const lat = p.projectSiteInformation?.siteLocation?.latitude;
+    const lng = p.projectSiteInformation?.siteLocation?.longitude;
+    const t = assignTerritory(lat, lng) || 'Unassigned';
+    const s = p.projectSiteInformation?.siteProjectStart;
+    if (!s) continue;
+    const k = s.substring(0, 7);
+    const a = p.projectSiteInformation?.siteAreaDisturbed || 0;
+    if (!r[t]) r[t] = {};
+    if (!r[t][k]) r[t][k] = { acres: 0, hours: 0 };
+    r[t][k].acres += a;
+    r[t][k].hours += a * hpa;
+  }
+  return r;
+}
+
+function getUpcomingProjects(permits) {
+  const today = new Date(), cutoff = new Date();
+  cutoff.setDate(today.getDate() + 90);
+  const u = {};
+  for (const p of permits) {
+    const s = p.projectSiteInformation?.siteProjectStart;
+    if (!s) continue;
+    const d = new Date(s + 'T00:00:00');
+    if (d < today || d > cutoff) continue;
+    const t = assignTerritory(p.projectSiteInformation?.siteLocation?.latitude, p.projectSiteInformation?.siteLocation?.longitude) || 'Unassigned';
+    if (!u[t]) u[t] = [];
+    u[t].push(p);
+  }
+  for (const k in u) u[k].sort((a, b) => (b.projectSiteInformation?.siteAreaDisturbed || 0) - (a.projectSiteInformation?.siteAreaDisturbed || 0)).splice(5);
+  return u;
+}
+
+function filterPermits(permits, opts) {
+  return permits.filter(p => {
+    if (opts.startDate || opts.endDate) {
+      const d = parseDateInput(p.projectSiteInformation?.siteProjectStart);
+      if (!d || (opts.startDate && d < opts.startDate) || (opts.endDate && d > opts.endDate)) return false;
+    }
+    if (opts.submittedStart || opts.submittedEnd) {
+      const d = parseDateInput(p.submittedDate);
+      if (!d || (opts.submittedStart && d < opts.submittedStart) || (opts.submittedEnd && d > opts.submittedEnd)) return false;
+    }
+    if (opts.minAcres > 0 && (p.projectSiteInformation?.siteAreaDisturbed || 0) < opts.minAcres) return false;
+    if (opts.permitStatuses?.length && !opts.permitStatuses.includes(p.status)) return false;
+    if (opts.requiredAttachments?.length) {
+      const atts = p.attachments || [];
+      if (!opts.requiredAttachments.every(c => atts.some(a => a.category === c))) return false;
+    }
+    if (!opts.includeTBD && isTBDOperator(p.operatorInformation?.operatorName)) return false;
+    return true;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// REPORT GENERATION
+// ══════════════════════════════════════════════════════════════════
+function slugify(t) { return t.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-'); }
+
+function generateReport(permits, opts = {}) {
+  const { includeDocs = true, hoursPerAcre = 150 } = opts;
+  const now = new Date();
+  const genDate = now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  const grouped = {}, unassigned = [];
+  for (const p of permits) {
+    const t = assignTerritory(p.projectSiteInformation?.siteLocation?.latitude, p.projectSiteInformation?.siteLocation?.longitude);
+    if (t) { (grouped[t] ||= []).push(p); } else { unassigned.push(p); }
+  }
+
+  const sorted = Object.keys(grouped).sort((a, b) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')));
+  for (const k of sorted) grouped[k].sort((a, b) => (b.projectSiteInformation?.siteAreaDisturbed || 0) - (a.projectSiteInformation?.siteAreaDisturbed || 0));
+  unassigned.sort((a, b) => (b.projectSiteInformation?.siteAreaDisturbed || 0) - (a.projectSiteInformation?.siteAreaDisturbed || 0));
+
+  const totalAcres = permits.reduce((s, p) => s + (p.projectSiteInformation?.siteAreaDisturbed || 0), 0);
+  const totalHours = totalAcres * hoursPerAcre;
+  const readyCount = permits.filter(isShovelReady).length;
+
+  let md = `# NPDES Construction General Permit — Territory Report\n\n`;
+  md += `**Generated:** ${genDate}  \n**Total Permits:** ${permits.length}  \n**Total Acres Disturbed:** ${totalAcres.toLocaleString('en-US', {maximumFractionDigits:2})}  \n**Estimated Labor Hours:** ${Math.round(totalHours).toLocaleString()} (${hoursPerAcre} hrs/acre)  \n**Shovel-Ready Projects:** ${readyCount}\n\n---\n\n`;
+
+  const timeline = getTimelineData(permits);
+  if (timeline.length) {
+    md += `## Project Timeline\n\n| Month | New Permits | Acres | Est. Hours |\n|-------|-------------|-------|------------|\n`;
+    for (const [m, d] of timeline) md += `| ${m} | ${d.permits} | ${d.acres.toLocaleString('en-US', {maximumFractionDigits:1})} | ${Math.round(d.acres * hoursPerAcre).toLocaleString()} |\n`;
+    md += `\n---\n\n`;
+  }
+
+  const opStats = getOperatorStats(permits).filter(o => o.permits >= 2);
+  if (opStats.length) {
+    md += `## High-Engagement Operators\n\n| Operator | Permits | Total Acres | Counties |\n|----------|---------|-------------|----------|\n`;
+    for (const o of opStats) md += `| ${o.name} | ${o.permits} | ${o.acres.toLocaleString('en-US', {maximumFractionDigits:1})} | ${o.counties.join(', ')}${o.permits >= 3 ? ' · High priority' : ''} |\n`;
+    md += `\n---\n\n`;
+  }
+
+  const labor = getLaborByLocalMonth(permits, hoursPerAcre);
+  const localsWithLabor = Object.keys(labor).sort((a, b) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')));
+  if (localsWithLabor.length) {
+    md += `## Labor Demand by Territory and Month\n\n_Estimates based on ${hoursPerAcre} labor-hours per acre disturbed_\n\n`;
+    let grandHrs = 0;
+    for (const l of localsWithLabor) {
+      const months = Object.keys(labor[l]).sort();
+      if (!months.length) continue;
+      md += `### ${l}\n\n| Month | Acres | Est. Hours |\n|-------|-------|------------|\n`;
+      let localHrs = 0;
+      for (const m of months) {
+        const d = labor[l][m]; localHrs += d.hours;
+        md += `| ${m} | ${d.acres.toLocaleString('en-US', {maximumFractionDigits:1})} | ${Math.round(d.hours).toLocaleString()} |\n`;
+      }
+      grandHrs += localHrs;
+      md += `| **Subtotal** | | **${Math.round(localHrs).toLocaleString()}** |\n\n`;
+    }
+    md += `**Total Estimated Hours:** ${Math.round(grandHrs).toLocaleString()}\n\n---\n\n`;
+  }
+
+  const upcoming = getUpcomingProjects(permits);
+  const upLocals = Object.keys(upcoming).filter(l => upcoming[l].length > 0).sort((a, b) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')));
+  if (upLocals.length) {
+    md += `## Top Upcoming Projects by Territory\n\n_Projects starting within 90 days, sorted by acres_\n\n`;
+    for (const l of upLocals) {
+      md += `### ${l}\n\n`;
+      upcoming[l].forEach((p, i) => {
+        const s = p.projectSiteInformation || {}, a = s.siteAddress || {}, op = p.operatorInformation || {}, poc = op.operatorPointOfContact || {};
+        const badge = isShovelReady(p) ? ' · Shovel-Ready' : '';
+        md += `${i + 1}. **${s.siteName || 'Unnamed'}** (\`${p.npdesId || 'N/A'}\`) · ${s.siteAreaDisturbed ? formatAcres(s.siteAreaDisturbed) : 'N/A'} · Starts: ${formatDate(s.siteProjectStart) || 'TBD'}${badge}\n`;
+        md += `    Location: ${[a.address1, a.city, a.stateCode].filter(Boolean).join(', ')}${a.county ? ' · ' + a.county + ' County' : ''}\n`;
+        if (op.operatorName) md += `    Operator: ${op.operatorName}\n`;
+        if (poc.email) {
+          const n = [poc.firstName, poc.lastName].filter(Boolean).join(' ') || 'Contact';
+          md += `    Contact: [${n}](${poc.email.startsWith('mailto:') ? poc.email : 'mailto:' + poc.email})`;
+          if (poc.phone) md += ` · ${poc.phone}`;
+          md += '\n';
+        }
+        md += '\n';
+      });
+      md += '\n';
+    }
+    md += `---\n\n`;
+  }
+
+  md += `## Summary by Territory\n\n| Territory | Permits | Acres | Est. Hours |\n|-----------|---------|-------|------------|\n`;
+  for (const l of sorted) {
+    const ps = grouped[l], a = ps.reduce((s, x) => s + (x.projectSiteInformation?.siteAreaDisturbed || 0), 0);
+    md += `| [${l}](#${slugify(l)}) | ${ps.length} | ${a.toLocaleString('en-US', {maximumFractionDigits:2})} | ${Math.round(a * hoursPerAcre).toLocaleString()} |\n`;
+  }
+  if (unassigned.length) md += `| Unassigned | ${unassigned.length} | — | — |\n`;
+  md += `| **Total** | **${permits.length}** | **${totalAcres.toLocaleString('en-US', {maximumFractionDigits:2})}** | **${Math.round(totalHours).toLocaleString()}** |\n\n---\n\n`;
+
+  for (const l of sorted) md += formatLocalSection(l, grouped[l], includeDocs, hoursPerAcre);
+  if (unassigned.length) md += formatLocalSection('Unassigned', unassigned, includeDocs, hoursPerAcre);
+
+  const contacts = getContacts(permits);
+  if (contacts.length) {
+    md += `---\n\n## Business Representative Contacts\n\n`;
+    for (const c of contacts) {
+      md += `### ${c.name}\n\n`;
+      if (c.contact) md += `- **Primary Contact:** ${c.contact}${c.title ? ', ' + c.title : ''}\n`;
+      if (c.phone) md += `- **Phone:** ${c.phone}\n`;
+      if (c.email) md += `- **Email:** [${c.email}](mailto:${c.email})\n`;
+      if (c.address) md += `- **Address:** ${c.address}\n`;
+      if (c.counties.length) md += `- **Active Counties:** ${c.counties.join(', ')}\n`;
+      md += '\n';
+    }
+  }
+  return md;
+}
+
+function formatLocalSection(local, projects, includeDocs, hpa) {
+  const acres = projects.reduce((s, p) => s + (p.projectSiteInformation?.siteAreaDisturbed || 0), 0);
+  let md = `## ${local}\n\n_${projects.length} permit${projects.length !== 1 ? 's' : ''} · ${acres.toLocaleString('en-US', {maximumFractionDigits:2})} acres · ~${Math.round(acres * hpa).toLocaleString()} estimated labor-hours_\n\n`;
+  for (let i = 0; i < projects.length; i++) {
+    md += formatProject(projects[i], i + 1, includeDocs);
+    if (i < projects.length - 1) md += '\n---\n\n';
+  }
+  return md + '\n---\n\n';
+}
+
+function formatProject(p, num, includeDocs) {
+  const s = p.projectSiteInformation || {}, a = s.siteAddress || {}, loc = s.siteLocation || {}, op = p.operatorInformation || {}, poc = op.operatorPointOfContact || {};
+  let md = `### ${num}. ${s.siteName || '(Unnamed)'}\n\n**NPDES ID:** \`${p.npdesId || 'N/A'}\`${isShovelReady(p) ? ' · Shovel-Ready' : ''}\n\n`;
+  if (formatAddress(a)) md += `**Site Address:** ${formatAddress(a)}\n\n`;
+  if (loc.latitude && loc.longitude) md += `**Map:** [View on Google Maps](https://maps.google.com/?q=${loc.latitude},${loc.longitude})\n\n`;
+  if (s.siteAreaDisturbed != null) md += `**Area to Be Disturbed:** ${formatAcres(s.siteAreaDisturbed)}\n\n`;
+  if (s.siteProjectStart || s.siteProjectEnd) md += `**Project Duration:** ${formatDate(s.siteProjectStart) || '—'} through ${formatDate(s.siteProjectEnd) || '—'}\n\n`;
+
+  md += `**Permit Status:** ${humanStatus(p.status, STATUS_MAP) || '—'}  \n`;
+  if (p.submissionStatus) md += `**Submission Status:** ${p.submissionStatus}  \n`;
+  if (humanStatus(p.submissionType, SUBMISSION_TYPE_MAP)) md += `**Submission Type:** ${humanStatus(p.submissionType, SUBMISSION_TYPE_MAP)}  \n`;
+  if (humanStatus(p.coverageType, COVERAGE_TYPE_MAP)) md += `**Permit Type:** ${humanStatus(p.coverageType, COVERAGE_TYPE_MAP)}  \n`;
+  if (humanStatus(p.coverageStatus, COVERAGE_STATUS_MAP)) md += `**Coverage Status:** ${humanStatus(p.coverageStatus, COVERAGE_STATUS_MAP)}  \n`;
+  md += '\n';
+
+  const dates = [['Submitted', p.submittedDate], ['Certified', p.certifiedDate], ['Effective', p.effectiveDate], ['Review Expires', p.reviewExpiration], ['Permit Expires', p.expirationDate]].filter(([, v]) => v);
+  if (dates.length) { for (const [l, v] of dates) md += `**${l}:** ${formatDateShort(v)}  \n`; md += '\n'; }
+
+  if (op.operatorName) {
+    md += `#### Operator\n\n**Organization:** ${op.operatorName}\n\n`;
+    if (formatAddress(op.operatorAddress)) md += `**Address:** ${formatAddress(op.operatorAddress)}\n\n`;
+    const name = [poc.firstName, poc.lastName].join(' ').trim();
+    if (name || poc.title || poc.phone || poc.email) {
+      md += `**Point of Contact:**  \n`;
+      if (name) md += `    **Name:** ${name}  \n`;
+      if (poc.title) md += `    **Title:** ${poc.title}  \n`;
+      if (poc.organization) md += `    **Organization:** ${poc.organization}  \n`;
+      if (poc.phone) md += `    **Phone:** ${poc.phone}  \n`;
+      if (poc.cell) md += `    **Cell:** ${poc.cell}  \n`;
+      if (poc.email) md += `    **Email:** [${poc.email}](mailto:${poc.email})  \n`;
+      md += '\n';
+    }
+  }
+
+  if (includeDocs && p.attachments?.length) {
+    const docs = p.attachments.filter(x => x.name && x.category !== 'ZIP');
+    if (docs.length) {
+      md += `#### Attached Documents\n\n`;
+      for (const d of docs) {
+        const cat = humanStatus(d.category, ATTACHMENT_CATEGORY_MAP) || d.category;
+        const size = formatFileSize(d.size);
+        md += `- [${d.name}](${EPA_ATTACHMENT_BASE}/${p.id}/attachment/zip) — ${cat}${size ? ' (' + size + ')' : ''}  \n`;
+      }
+      md += '\n';
+    }
+  }
+  return md;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UI LOGIC
+// ══════════════════════════════════════════════════════════════════
+let loadedPermits = null;
+const statusBar = document.getElementById('status-bar');
+const fetchStatus = document.getElementById('fetch-status');
+const statsStrip = document.getElementById('stats-strip');
+const filterControls = document.getElementById('filter-controls');
+const generateSection = document.getElementById('generate-section');
+const outputSection = document.getElementById('output-section');
+const reportOutput = document.getElementById('report-output');
+const emptyHero = document.getElementById('empty-hero');
+
+function showStatus(msg, type = 'info', el = statusBar) {
+  el.classList.add('visible');
+  el.querySelector('span').textContent = msg;
+  const dot = el.querySelector('.status-dot');
+  dot.className = 'status-dot' + (type === 'success' ? ' success' : type === 'error' ? ' error' : type === 'loading' ? ' loading' : '');
+}
+
+function updateStats(permits) {
+  const totalAcres = permits.reduce((s, p) => s + (p.projectSiteInformation?.siteAreaDisturbed || 0), 0);
+  const locals = new Set();
+  let ready = 0;
+  for (const p of permits) {
+    if (isShovelReady(p)) ready++;
+    const t = assignTerritory(p.projectSiteInformation?.siteLocation?.latitude, p.projectSiteInformation?.siteLocation?.longitude);
+    if (t) locals.add(t);
+  }
+  document.getElementById('stat-total').textContent = permits.length;
+  document.getElementById('stat-locals').textContent = locals.size;
+  document.getElementById('stat-acres').textContent = totalAcres.toLocaleString('en-US', {maximumFractionDigits:1});
+  document.getElementById('stat-ready').textContent = ready;
+}
+
+function processFile(file) {
+  if (!file || !file.name.endsWith('.json')) return showStatus('Please upload a valid .json file.', 'error');
+  document.getElementById('file-name-text').textContent = file.name;
+  document.getElementById('file-name-badge').style.display = 'inline-flex';
+  showStatus('Reading file…', 'loading');
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error('Expected JSON array.');
+      loadedPermits = data;
+      updateStats(data);
+      statsStrip.style.display = 'grid';
+      filterControls.style.display = 'flex';
+      generateSection.style.display = 'flex';
+      emptyHero.style.display = 'none';
+      showStatus(`Loaded ${data.length} permits from "${file.name}".`, 'success');
+    } catch (err) { showStatus('Error: ' + err.message, 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+// County checkboxes
+const countyGrid = document.getElementById('countyGrid');
+COUNTIES.forEach(c => {
+  const l = document.createElement('label');
+  l.className = 'county-item';
+  l.innerHTML = `<input type="checkbox" value="${c}" checked> ${c}`;
+  countyGrid.appendChild(l);
+});
+
+// Fetch logic
+const fetchBtn = document.getElementById('fetch-btn');
+const fetchClear = document.getElementById('fetch-clear');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+
+async function fetchPermits() {
+  const counties = Array.from(document.querySelectorAll('#countyGrid input:checked')).map(x => x.value);
+  if (!counties.length) return showStatus('Select at least one county.', 'error', fetchStatus);
+
+  const keyword = document.getElementById('fetch-keyword').value.trim();
+  const operator = document.getElementById('fetch-operator').value.trim();
+  const sFrom = document.getElementById('fetch-startFrom').value;
+  const sTo = document.getElementById('fetch-startTo').value;
+  const eFrom = document.getElementById('fetch-endFrom').value;
+  const eTo = document.getElementById('fetch-endTo').value;
+  const subFrom = document.getElementById('fetch-submittedFrom').value;
+  const subTo = document.getElementById('fetch-submittedTo').value;
+  const minAcres = parseFloat(document.getElementById('fetch-minAcres').value) || 0;
+  const statuses = ['fetch-status-active','fetch-status-pending','fetch-status-terminated','fetch-status-expired'].filter(id => document.getElementById(id).checked).map(id => id.replace('fetch-status-','').charAt(0).toUpperCase() + id.replace('fetch-status-','').slice(1));
+  // Map UI checkboxes to exact API status strings if needed, but keeping simple:
+  const statusMap = { 'Active':'Active', 'Pending':'Pending', 'Terminated':'Terminated', 'Expired':'Expired' };
+  const apiStatuses = document.querySelectorAll('#fetch-form input[type="checkbox"]:checked').forEach(cb => { if(statusMap[cb.value]) statusMap[cb.value]; });
+  const permitStatuses = Array.from(document.querySelectorAll('#fetch-form .checkbox-item input:checked')).map(x => x.value);
+  const reqAtts = Array.from(document.querySelectorAll('#fetch-form .checkbox-item input:checked')).filter(x => ['STORMWATER','ECOCAT_APPROVAL','HISTORIC_PRESERVATION'].includes(x.value)).map(x => x.value);
+
+  fetchBtn.disabled = true;
+  loadedPermits = null;
+  showStatus('Fetching permits…', 'loading', fetchStatus);
+  progressWrap.classList.add('active'); progressBar.style.width = '10%';
+
+  const combined = [];
+  let errors = 0;
+
+  const fetchCounty = (county) => new Promise(resolve => {
+    jsonp(GAS_PROXY_URL, { criteria: JSON.stringify({ projectState:'IL', projectCounty:county, issuer:'IL', projectSiteName:keyword||null, operatorName:operator||null, coverageType:null, projectAddressLine1:null, projectCity:null, projectZip:null, coverageStatus:null, submittedDateFrom:subFrom||'', submittedDateTo:subTo||'', tribalIndicator:null, federalIndicator:null, submissionStatus:null, submissionType:null, npdesId:null, filter:'' }) },
+      res => { combined.push(...(res.records || [])); resolve(); },
+      () => { errors++; resolve(); }
+    );
+  });
+
+  for (let i = 0; i < counties.length; i++) {
+    await fetchCounty(counties[i]);
+    progressBar.style.width = (10 + ((i+1)/counties.length)*80) + '%';
+  }
+
+  progressWrap.classList.remove('active'); progressBar.style.width = '0%';
+
+  // Client filters
+  const filtered = filterPermits(combined, { submittedStart: parseDateInput(subFrom), submittedEnd: parseDateInput(subTo), startDate: parseDateInput(sFrom), endDate: parseDateInput(sTo), minAcres, permitStatuses, requiredAttachments: reqAtts, includeTBD: true });
+  const seen = new Set();
+  const deduped = filtered.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+
+  loadedPermits = deduped;
+  updateStats(deduped);
+  statsStrip.style.display = 'grid';
+  filterControls.style.display = 'flex';
+  generateSection.style.display = 'flex';
+  emptyHero.style.display = 'none';
+  showStatus(`${deduped.length} permits fetched. Ready to generate.`, errors ? 'error' : 'success', fetchStatus);
+  fetchBtn.disabled = false;
+}
+
+fetchBtn.addEventListener('click', fetchPermits);
+fetchClear.addEventListener('click', () => {
+  document.getElementById('fetch-form').reset();
+  document.querySelectorAll('#countyGrid input').forEach(x => x.checked = true);
+  document.querySelectorAll('.checkbox-item input').forEach(x => x.checked = false);
+  ['fetch-status-active','fetch-status-pending'].forEach(id => document.getElementById(id).checked = true);
+  showStatus('', 'info', fetchStatus);
+});
+
+// File Upload Handlers
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+// Generate Report
+document.getElementById('generate-btn').addEventListener('click', async () => {
+  if (!loadedPermits) return;
+  showStatus('Generating report…', 'loading');
+  await loadTerritories();
+  setTimeout(() => {
+    try {
+      const opts = {
+        startDate: parseDateInput(document.getElementById('start-date').value),
+        endDate: parseDateInput(document.getElementById('end-date').value),
+        includeTBD: document.getElementById('include-tbd').checked,
+        includeDocs: document.getElementById('include-docs').checked,
+        hoursPerAcre: parseFloat(document.getElementById('labor-heuristic').value) || 150
+      };
+      const filtered = filterPermits(loadedPermits, opts);
+      updateStats(filtered);
+      reportOutput.value = generateReport(filtered, opts);
+      outputSection.classList.add('visible');
+      outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showStatus(`Report generated — ${filtered.length} permits.`, 'success');
+    } catch (err) { showStatus('Error: ' + err.message, 'error'); console.error(err); }
+  }, 30);
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  loadedPermits = null;
+  fileInput.value = '';
+  document.getElementById('file-name-badge').style.display = 'none';
+  statsStrip.style.display = 'none';
+  filterControls.style.display = 'none';
+  generateSection.style.display = 'none';
+  outputSection.classList.remove('visible');
+  emptyHero.style.display = 'block';
+  statusBar.classList.remove('visible');
+  reportOutput.value = '';
+  document.getElementById('start-date').value = '';
+  document.getElementById('end-date').value = '';
+  document.getElementById('include-docs').checked = true;
+  document.getElementById('include-tbd').checked = true;
+  document.getElementById('labor-heuristic').value = '150';
+});
+
+document.getElementById('clear-dates').addEventListener('click', () => {
+  document.getElementById('start-date').value = '';
+  document.getElementById('end-date').value = '';
+});
+
+document.getElementById('copy-btn').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(reportOutput.value); } catch { reportOutput.select(); document.execCommand('copy'); }
+  const t = document.getElementById('toast'); t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200);
+});
+
+document.getElementById('download-btn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([reportOutput.value], { type: 'text/markdown' }));
+  a.download = `npdes-territory-report-${new Date().toISOString().slice(0,10)}.md`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+// Dark Mode
+const darkToggle = document.getElementById('dark-toggle');
+function applyDark(on) { if (on) document.body.setAttribute('data-dark', ''); else document.body.removeAttribute('data-dark'); }
+applyDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => applyDark(e.matches));
+darkToggle.addEventListener('click', () => applyDark(!document.body.hasAttribute('data-dark')));
+
+// Init Dates
+(function() {
+  const today = new Date(); today.setDate(today.getDate());
+  const twoYears = new Date(); twoYears.setFullYear(twoYears.getFullYear() + 2);
+  document.getElementById('fetch-startFrom').value = today.toISOString().split('T')[0];
+  document.getElementById('fetch-startTo').value = twoYears.toISOString().split('T')[0];
+})();
+</script>
+</body>
+</html>
