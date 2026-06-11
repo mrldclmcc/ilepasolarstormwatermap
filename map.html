@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IL Solar EPA Stormwater Permit Map</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Design tokens ─────────────────────────────────────── */
+    :root {
+      --bg:         #f5f5f3;
+      --surface:    #ffffff;
+      --border:     #ddddd8;
+      --text:       #1a1a1a;
+      --text-muted: #767670;
+      --accent:     #1a3d6e;
+      --accent-lt:  #e8eef6;
+      --danger:     #c0392b;
+      --radius:     6px;
+      --shadow:     0 2px 12px rgba(0,0,0,0.10);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,0.16);
+      --panel-w:    340px;
+      --font:       'IBM Plex Sans', sans-serif;
+      --mono:       'IBM Plex Mono', monospace;
+
+      /* County pin colors */
+      --c-boone:    #2563eb;
+      --c-cook:     #7c3aed;
+      --c-dupage:   #0891b2;
+      --c-grundy:   #059669;
+      --c-kane:     #d97706;
+      --c-kendall:  #dc2626;
+      --c-mchenry:  #db2777;
+      --c-lake:     #65a30d;
+      --c-will:     #9333ea;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 0 20px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    header span {
+      font-size: 11px;
+      font-weight: 300;
+      opacity: 0.65;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* ── Layout ────────────────────────────────────────────── */
+    .app {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Side panel ────────────────────────────────────────── */
+    .panel {
+      width: var(--panel-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel-footer {
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* ── Form elements ─────────────────────────────────────── */
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+
+    label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    input[type="text"],
+    input[type="date"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    input[type="text"]:focus,
+    input[type="date"]:focus {
+      border-color: var(--accent);
+    }
+
+    .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ── County checkboxes ─────────────────────────────────── */
+    .county-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px 12px;
+    }
+
+    .county-check {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      user-select: none;
+      padding: 3px 0;
+    }
+
+    .county-check input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .county-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .county-check span {
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .county-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      font-family: var(--font);
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.15s, opacity 0.15s;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #15335a; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Status bar ────────────────────────────────────────── */
+    .status-bar {
+      font-size: 11px;
+      color: var(--text-muted);
+      min-height: 16px;
+      text-align: center;
+      font-family: var(--mono);
+    }
+    .status-bar.error { color: var(--danger); }
+
+    /* ── Progress ──────────────────────────────────────────── */
+    .progress-wrap {
+      height: 3px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-wrap.active { display: block; }
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    /* ── Legend ────────────────────────────────────────────── */
+    .legend-section { display: flex; flex-direction: column; gap: 6px; }
+
+    /* ── Map ───────────────────────────────────────────────── */
+    #map {
+      flex: 1;
+      background: #e8e8e4;
+    }
+
+    /* ── Tooltip ───────────────────────────────────────────── */
+    .leaflet-tooltip.permit-tip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 11px;
+      font-family: var(--font);
+      font-size: 12px;
+      box-shadow: var(--shadow);
+      max-width: 220px;
+      pointer-events: none;
+    }
+    .leaflet-tooltip.permit-tip::before { display: none; }
+    .tip-name { font-weight: 600; color: var(--text); line-height: 1.3; }
+    .tip-meta { color: var(--text-muted); margin-top: 3px; font-size: 11px; }
+
+    /* ── Info modal ────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 10px;
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 520px;
+      max-height: 88dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .modal-county-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 99px;
+      color: #fff;
+      margin-top: 5px;
+      white-space: nowrap;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--text-muted);
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .modal-close:hover { color: var(--text); }
+
+    .modal-body {
+      padding: 18px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .info-section { display: flex; flex-direction: column; gap: 10px; }
+
+    .info-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+    }
+
+    .info-item { display: flex; flex-direction: column; gap: 2px; }
+    .info-item.full { grid-column: 1 / -1; }
+
+    .info-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .info-value {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .status-active    { background: #dcfce7; color: #166534; }
+    .status-inactive  { background: #fee2e2; color: #991b1b; }
+    .status-pending   { background: #fef3c7; color: #92400e; }
+    .status-other     { background: var(--bg); color: var(--text-muted); }
+
+    .npdes-id {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    /* ── Mobile panel toggle ───────────────────────────────── */
+    .panel-toggle {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 500;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 99px;
+      padding: 10px 22px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      .panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 70dvh;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+        z-index: 400;
+      }
+      .panel.open { transform: translateY(0); }
+      .panel-toggle { display: flex; }
+      #map { width: 100%; }
+      .app { flex-direction: column; }
+    }
+
+    /* ── Leaflet overrides ─────────────────────────────────── */
+    .leaflet-popup-content-wrapper {
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .leaflet-control-attribution {
+      font-size: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Illinois Solar EPA Stormwater Permit Map</h1>
+    <span>EPA ePermit Search</span>
+  </header>
+
+  <div class="app">
+    <!-- Side panel -->
+    <aside class="panel" id="panel">
+      <div class="panel-body">
+
+        <!-- Keyword -->
+        <div class="field-group">
+          <label for="keyword">Site name keyword</label>
+          <input type="text" id="keyword" placeholder="e.g. solar" value="solar" />
+        </div>
+
+        <!-- Operator -->
+        <div class="field-group">
+          <label for="operator">Operator name</label>
+          <input type="text" id="operator" placeholder="Optional" />
+        </div>
+
+        <!-- Project dates -->
+        <div class="field-group">
+          <label>Project start date range</label>
+          <div class="date-row">
+            <input type="date" id="startFrom" title="Project start — from" />
+            <input type="date" id="startTo"   title="Project start — to" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Project end date range</label>
+          <div class="date-row">
+            <input type="date" id="endFrom" title="Project end — from" />
+            <input type="date" id="endTo"   title="Project end — to" />
+          </div>
+        </div>
+
+        <!-- Counties -->
+        <div class="field-group">
+          <label>Counties</label>
+          <div class="county-actions">
+            <button class="link-btn" id="selectAll">Select all</button>
+            <button class="link-btn" id="selectNone">Clear all</button>
+          </div>
+          <div class="county-grid" id="countyGrid"></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend-section">
+          <!-- populated dynamically, same as county grid -->
+        </div>
+
+      </div>
+
+      <div class="panel-footer">
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="status-bar" id="statusBar">Enter search criteria and click Search.</div>
+        <button class="btn btn-primary" id="searchBtn">Search</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn btn-secondary" id="exportBtn" disabled>Export JSON</button>
+          <button class="btn btn-secondary" id="copyLinkBtn">Copy link</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </div>
+
+  <!-- Mobile toggle -->
+  <button class="panel-toggle" id="panelToggle">☰ Search</button>
+
+  <!-- Info modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalTitle"></div>
+          <span class="modal-county-badge" id="modalBadge"></span>
+        </div>
+        <button class="modal-close" id="modalClose">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <script>
+  // ── CONFIG ── Replace with your deployed GAS Web App URL ──────────────────
+  var GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxo16S_E-m37sBMHlX11OLa3bMjiksSKAt8FgiDNVwlR1P7PcWKuXDzTOFP5h2DC3Vm/exec';
+  // ──────────────────────────────────────────────────────────────────────────
+
+  var COUNTIES = [
+    { name: 'Boone',   color: '#2563eb' },
+    { name: 'Cook',    color: '#7c3aed' },
+    { name: 'DuPage',  color: '#0891b2' },
+    { name: 'Grundy',  color: '#059669' },
+    { name: 'Kane',    color: '#d97706' },
+    { name: 'Kendall', color: '#dc2626' },
+    { name: 'McHenry', color: '#db2777' },
+    { name: 'Lake',    color: '#65a30d' },
+    { name: 'Will',    color: '#9333ea' },
+  ];
+
+  var countyColorMap = {};
+  COUNTIES.forEach(function(c) { countyColorMap[c.name.toUpperCase()] = c.color; });
+
+  // ── Build county checkboxes ────────────────────────────────────────────────
+  var grid = document.getElementById('countyGrid');
+  COUNTIES.forEach(function(c) {
+    var label = document.createElement('label');
+    label.className = 'county-check';
+    label.innerHTML =
+      '<input type="checkbox" class="county-cb" value="' + c.name + '" checked />' +
+      '<span class="county-dot" style="background:' + c.color + '"></span>' +
+      '<span>' + c.name + '</span>';
+    grid.appendChild(label);
+  });
+
+  document.getElementById('selectAll').addEventListener('click', function() {
+    document.querySelectorAll('.county-cb').forEach(function(cb) { cb.checked = true; });
+  });
+  document.getElementById('selectNone').addEventListener('click', function() {
+    document.querySelectorAll('.county-cb').forEach(function(cb) { cb.checked = false; });
+  });
+
+  // ── Map setup ─────────────────────────────────────────────────────────────
+  var map = L.map('map', { zoomControl: true }).setView([41.8, -88.2], 8);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 19
+  }).addTo(map);
+
+  var markersLayer = L.layerGroup().addTo(map);
+  var allData = [];
+
+  // ── Pin icon factory ───────────────────────────────────────────────────────
+  function makeIcon(color) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="24" height="36">' +
+      '<path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z" fill="' + color + '" />' +
+      '<circle cx="12" cy="12" r="5" fill="white" />' +
+      '</svg>';
+    return L.divIcon({
+      html: svg,
+      className: '',
+      iconSize:   [24, 36],
+      iconAnchor: [12, 36],
+      popupAnchor:[0, -36]
+    });
+  }
+
+  // ── County color lookup ────────────────────────────────────────────────────
+  function colorForCounty(countyStr) {
+    if (!countyStr) return '#888';
+    return countyColorMap[(countyStr + '').toUpperCase()] || '#888';
+  }
+
+  // ── Acreage → Circle radius (meters) ────────────────────────────────────────
+function acresToRadius(acres) {
+  if (!acres || acres <= 0) return 0;
+  // 1 acre = 4046.86 m²; circle area = πr² → r = √(area/π)
+  var areaM2 = acres * 4046.86;
+  var radiusM = Math.sqrt(areaM2 / Math.PI);
+  // Scale factor for visual clarity (adjust as needed)
+  // Also cap max radius to avoid overwhelming the map
+  return Math.min(radiusM * 0.6, 300); // max ~300m visual radius
+}  
+
+  // ── Date helpers ───────────────────────────────────────────────────────────
+  function parseDate(str) {
+    if (!str) return null;
+    return new Date(str.substring(0, 10));
+  }
+  function inputDate(id) {
+    var v = document.getElementById(id).value;
+    return v ? new Date(v) : null;
+  }
+
+  // ── Client-side date filter ────────────────────────────────────────────────
+  function passesDateFilter(rec) {
+    var info = rec.projectSiteInformation || {};
+    var projStart = parseDate(info.siteProjectStart);
+    var projEnd   = parseDate(info.siteProjectEnd);
+
+    var sf = inputDate('startFrom'), st = inputDate('startTo');
+    var ef = inputDate('endFrom'),   et = inputDate('endTo');
+
+    if (sf && projStart && projStart < sf) return false;
+    if (st && projStart && projStart > st) return false;
+    if (ef && projEnd   && projEnd   < ef) return false;
+    if (et && projEnd   && projEnd   > et) return false;
+    return true;
+  }
+
+  // ── Status pill class ──────────────────────────────────────────────────────
+  function statusClass(s) {
+    if (!s) return 'status-other';
+    var l = s.toLowerCase();
+    if (l === 'active')   return 'status-active';
+    if (l === 'inactive') return 'status-inactive';
+    if (l.includes('review') || l.includes('pending')) return 'status-pending';
+    return 'status-other';
+  }
+
+  // ── Format date strings ────────────────────────────────────────────────────
+  function fmtDate(str) {
+    if (!str) return '—';
+    var d = new Date(str.substring(0, 10) + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  function fmtDateTime(str) {
+    if (!str) return '—';
+    var d = new Date(str);
+    return d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  // ── Build info modal content ───────────────────────────────────────────────
+  function openModal(rec) {
+    var info = rec.projectSiteInformation || {};
+    var addr = info.siteAddress || {};
+    var loc  = info.siteLocation || {};
+    var op   = rec.operatorInformation || {};
+    var poc  = op.operatorPointOfContact || {};
+    var county = addr.county || '';
+    var color  = colorForCounty(county);
+
+    document.getElementById('modalTitle').textContent = info.siteName || rec.npdesId || 'Permit';
+    var badge = document.getElementById('modalBadge');
+    badge.textContent = county || 'Unknown county';
+    badge.style.background = color;
+
+    var addrParts = [addr.address1, addr.city, addr.stateCode, addr.zipCode].filter(Boolean);
+
+    var body = document.getElementById('modalBody');
+    body.innerHTML = '';
+
+    function section(title, rows) {
+      var s = document.createElement('div');
+      s.className = 'info-section';
+      var t = document.createElement('div');
+      t.className = 'info-section-title';
+      t.textContent = title;
+      s.appendChild(t);
+      var g = document.createElement('div');
+      g.className = 'info-grid';
+      rows.forEach(function(r) {
+        var item = document.createElement('div');
+        item.className = 'info-item' + (r.full ? ' full' : '');
+        var lbl = document.createElement('div');
+        lbl.className = 'info-label';
+        lbl.textContent = r.label;
+        var val = document.createElement('div');
+        val.className = 'info-value';
+        if (r.html) {
+          val.innerHTML = r.html;
+        } else {
+          val.textContent = r.value || '—';
+        }
+        item.appendChild(lbl);
+        item.appendChild(val);
+        g.appendChild(item);
+      });
+      s.appendChild(g);
+      body.appendChild(s);
+    }
+
+    section('Permit', [
+      { label: 'NPDES ID', html: '<span class="npdes-id">' + (rec.npdesId || '—') + '</span>' },
+      { label: 'Issuer', value: rec.issuer },
+      { label: 'Coverage status', html: '<span class="status-pill ' + statusClass(rec.coverageStatus) + '">' + (rec.coverageStatus || '—') + '</span>' },
+      { label: 'Status', html: '<span class="status-pill ' + statusClass(rec.status) + '">' + (rec.status || '—') + '</span>' },
+      { label: 'Submission type', value: rec.submissionType },
+      { label: 'Submission status', value: rec.submissionStatus },
+    ]);
+
+    section('Site', [
+      { label: 'Address', value: addrParts.join(', '), full: true },
+      { label: 'County', value: county },
+      { label: 'Acres disturbed', value: info.siteAreaDisturbed != null ? info.siteAreaDisturbed + ' ac' : '—' },
+      { label: 'Project start', value: fmtDate(info.siteProjectStart) },
+      { label: 'Project end', value: fmtDate(info.siteProjectEnd) },
+      { label: 'Lat / Lon', value: loc.latitude && loc.longitude ? loc.latitude.toFixed(5) + ', ' + loc.longitude.toFixed(5) : '—', full: false },
+    ]);
+
+    section('Operator', [
+      { label: 'Operator name', value: op.operatorName, full: true },
+      { label: 'Organization', value: poc.organization, full: true },
+      { label: 'Contact', value: [poc.firstName, poc.lastName].filter(Boolean).join(' ') || '—' },
+      { label: 'Title', value: poc.title },
+      { label: 'Phone', value: poc.phone },
+      { label: 'Email', value: poc.email, full: true },
+    ]);
+
+    section('Dates', [
+      { label: 'Certified', value: fmtDateTime(rec.certifiedDate) },
+      { label: 'Submitted', value: fmtDateTime(rec.submittedDate) },
+      { label: 'Effective', value: fmtDateTime(rec.effectiveDate) },
+      { label: 'Expiration', value: rec.expirationDate ? fmtDate(rec.expirationDate) : '—' },
+    ]);
+
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  document.getElementById('modalClose').addEventListener('click', function() {
+    document.getElementById('modalOverlay').classList.remove('open');
+  });
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+
+  // ── Render markers + acreage circles ────────────────────────────────────────
+function renderMarkers(records) {
+  markersLayer.clearLayers();
+  var bounds = [];
+
+  records.forEach(function(rec) {
+    var info = rec.projectSiteInformation || {};
+    var loc  = info.siteLocation || {};
+    var addr = info.siteAddress  || {};
+    var lat  = parseFloat(loc.latitude);
+    var lng  = parseFloat(loc.longitude);
+
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+
+    var county = addr.county || '';
+    var color  = colorForCounty(county);
+    var acres  = info.siteAreaDisturbed;
+    var radius = acresToRadius(acres);
+
+    // ── Draw acreage circle (if we have valid acreage) ──
+    if (radius > 0) {
+      var circle = L.circle([lat, lng], {
+        radius: radius,
+        color: color,
+        weight: 2,
+        opacity: 0.7,
+        fillColor: color,
+        fillOpacity: 0.15,
+        interactive: false // clicks pass through to marker
+      });
+      circle.addTo(markersLayer);
+    }
+
+    // ── Draw pin marker (unchanged) ──
+    var icon = makeIcon(color);
+    var marker = L.marker([lat, lng], { icon: icon });
+
+    // Tooltip on hover - now includes acreage
+    var tipAcres = acres != null ? ' · ' + acres + ' ac' : '';
+    marker.bindTooltip(
+      '<div class="tip-name">' + (info.siteName || rec.npdesId || '') + '</div>' +
+      '<div class="tip-meta">' + county + (county ? ' Co. · ' : '') + (rec.npdesId || '') + tipAcres + '</div>',
+      { className: 'permit-tip', sticky: true, offset: [12, 0] }
+    );
+
+    marker.on('click', function() { openModal(rec); });
+    marker.addTo(markersLayer);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+  }
+}
+
+  // ── Search ─────────────────────────────────────────────────────────────────
+  var searchBtn  = document.getElementById('searchBtn');
+  var exportBtn  = document.getElementById('exportBtn');
+  var statusBar  = document.getElementById('statusBar');
+  var progressW  = document.getElementById('progressWrap');
+  var progressB  = document.getElementById('progressBar');
+
+  function setStatus(msg, isError) {
+    statusBar.textContent = msg;
+    statusBar.className   = 'status-bar' + (isError ? ' error' : '');
+  }
+
+  function setProgress(pct) {
+    progressW.className = 'progress-wrap active';
+    progressB.style.width = pct + '%';
+  }
+
+  function clearProgress() {
+    progressW.className = 'progress-wrap';
+    progressB.style.width = '0%';
+  }
+
+  // ── JSONP helper ───────────────────────────────────────────────────────────
+  var _jsonpCounter = 0;
+  function jsonp(url, params, onSuccess, onError) {
+    var cbName = '__gasProxy_' + (++_jsonpCounter);
+    var timeout;
+
+    window[cbName] = function(data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      if (data.error) { onError(data.error); } else { onSuccess(data); }
+    };
+
+    var qs = Object.keys(params).map(function(k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+
+    var script = document.createElement('script');
+    script.src = url + '?' + qs + '&callback=' + cbName;
+    script.onerror = function() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      onError('Script load error');
+    };
+
+    timeout = setTimeout(function() {
+      delete window[cbName];
+      script.parentNode && script.parentNode.removeChild(script);
+      onError('Timeout');
+    }, 60000);
+
+    document.head.appendChild(script);
+  }
+
+  searchBtn.addEventListener('click', function() {
+    var selectedCounties = Array.from(document.querySelectorAll('.county-cb:checked')).map(function(cb) { return cb.value; });
+    if (selectedCounties.length === 0) {
+      setStatus('Select at least one county.', true);
+      return;
+    }
+
+    var keyword  = document.getElementById('keyword').value.trim();
+    var operator = document.getElementById('operator').value.trim();
+
+    searchBtn.disabled = true;
+    exportBtn.disabled = true;
+    allData = [];
+    markersLayer.clearLayers();
+    setStatus('Searching…', false);
+    setProgress(10);
+
+    var total    = selectedCounties.length;
+    var done     = 0;
+    var combined = [];
+    var errors   = 0;
+    var anyCapped = false;
+
+    selectedCounties.forEach(function(county) {
+      var criteria = {
+        projectState:    'IL',
+        projectCounty:   county,
+        issuer:          'IL',
+        projectSiteName: keyword || null,
+        operatorName:    operator || null,
+        coverageType:    null,
+        projectAddressLine1: null,
+        projectCity:     null,
+        projectZip:      null,
+        coverageStatus:  null,
+        submittedDateFrom: '',
+        submittedDateTo:   '',
+        tribalIndicator:  null,
+        federalIndicator: null,
+        submissionStatus: null,
+        submissionType:   null,
+        npdesId:          null,
+        filter:           ''
+      };
+
+      jsonp(
+        GAS_PROXY_URL,
+        { criteria: JSON.stringify(criteria) },
+        function(data) {
+          combined = combined.concat(data.records || []);
+          if (data.capped) anyCapped = true;
+          finalize();
+        },
+        function(err) {
+          errors++;
+          finalize();
+        }
+      );
+    });
+
+    function finalize() {
+      done++;
+      setProgress(10 + Math.round((done / total) * 80));
+
+      if (done < total) return;
+
+      // Client-side date filter
+      var filtered = combined.filter(passesDateFilter);
+
+      // De-duplicate by id
+      var seen = {};
+      filtered = filtered.filter(function(r) {
+        if (seen[r.id]) return false;
+        seen[r.id] = true;
+        return true;
+      });
+
+      allData = filtered;
+      renderMarkers(allData);
+      setProgress(100);
+
+      setTimeout(function() {
+        clearProgress();
+        var msg = allData.length + ' permit' + (allData.length !== 1 ? 's' : '') + ' mapped';
+        if (errors > 0) msg += ' (' + errors + ' county request' + (errors > 1 ? 's' : '') + ' failed)';
+        if (anyCapped) msg += ' · some counties capped at 200';
+        setStatus(msg, errors > 0);
+      }, 400);
+
+      searchBtn.disabled = false;
+      exportBtn.disabled = allData.length === 0;
+    }
+  });
+
+  // ── Export ─────────────────────────────────────────────────────────────────
+  exportBtn.addEventListener('click', function() {
+    if (!allData.length) return;
+    var blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'cgp-permits-' + new Date().toISOString().substring(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Mobile panel toggle ────────────────────────────────────────────────────
+  var panelToggle = document.getElementById('panelToggle');
+  var panel       = document.getElementById('panel');
+  panelToggle.addEventListener('click', function() {
+    panel.classList.toggle('open');
+    panelToggle.textContent = panel.classList.contains('open') ? '✕ Close' : '☰ Search';
+  });
+
+  // ── Default dates: today → +2 years ───────────────────────────────────────
+  function isoDate(d) { return d.toISOString().substring(0, 10); }
+
+  function applyDefaultDates() {
+    var today   = new Date();
+    var twoYears = new Date(today);
+    twoYears.setFullYear(twoYears.getFullYear() + 2);
+    document.getElementById('startFrom').value = isoDate(today);
+    document.getElementById('startTo').value   = isoDate(twoYears);
+  }
+
+  // ── URL state ──────────────────────────────────────────────────────────────
+  // Encodes current form state into the URL query string (no page reload).
+  // Recipient opens the URL → form pre-fills → search auto-runs.
+
+  function readFormState() {
+    return {
+      keyword:    document.getElementById('keyword').value.trim(),
+      operator:   document.getElementById('operator').value.trim(),
+      startFrom:  document.getElementById('startFrom').value,
+      startTo:    document.getElementById('startTo').value,
+      endFrom:    document.getElementById('endFrom').value,
+      endTo:      document.getElementById('endTo').value,
+      counties:   Array.from(document.querySelectorAll('.county-cb:checked')).map(function(cb) { return cb.value; })
+    };
+  }
+
+  function applyFormState(state) {
+    if (state.keyword   !== undefined) document.getElementById('keyword').value   = state.keyword;
+    if (state.operator  !== undefined) document.getElementById('operator').value  = state.operator;
+    if (state.startFrom !== undefined) document.getElementById('startFrom').value = state.startFrom;
+    if (state.startTo   !== undefined) document.getElementById('startTo').value   = state.startTo;
+    if (state.endFrom   !== undefined) document.getElementById('endFrom').value   = state.endFrom;
+    if (state.endTo     !== undefined) document.getElementById('endTo').value     = state.endTo;
+    if (Array.isArray(state.counties)) {
+      var set = {};
+      state.counties.forEach(function(c) { set[c] = true; });
+      document.querySelectorAll('.county-cb').forEach(function(cb) {
+        cb.checked = !!set[cb.value];
+      });
+    }
+  }
+
+  function stateToParams(state) {
+    var p = new URLSearchParams();
+    if (state.keyword)   p.set('q',  state.keyword);
+    if (state.operator)  p.set('op', state.operator);
+    if (state.startFrom) p.set('sf', state.startFrom);
+    if (state.startTo)   p.set('st', state.startTo);
+    if (state.endFrom)   p.set('ef', state.endFrom);
+    if (state.endTo)     p.set('et', state.endTo);
+    // Only encode counties if not all 9 selected (keeps URL short in the default case)
+    var allNames = COUNTIES.map(function(c) { return c.name; });
+    var missing = allNames.filter(function(n) { return state.counties.indexOf(n) === -1; });
+    if (missing.length > 0) p.set('c', state.counties.join(','));
+    return p;
+  }
+
+  function paramsToState(p) {
+    var state = {};
+    if (p.has('q'))  state.keyword   = p.get('q');
+    if (p.has('op')) state.operator  = p.get('op');
+    if (p.has('sf')) state.startFrom = p.get('sf');
+    if (p.has('st')) state.startTo   = p.get('st');
+    if (p.has('ef')) state.endFrom   = p.get('ef');
+    if (p.has('et')) state.endTo     = p.get('et');
+    if (p.has('c'))  state.counties  = p.get('c').split(',').map(function(s) { return s.trim(); });
+    else             state.counties  = COUNTIES.map(function(c) { return c.name; }); // default: all
+    return state;
+  }
+
+  function pushStateToURL(state) {
+    var params = stateToParams(state);
+    var newUrl = window.location.pathname + '?' + params.toString();
+    window.history.replaceState(null, '', newUrl);
+  }
+
+  // ── Copy link button ───────────────────────────────────────────────────────
+  document.getElementById('copyLinkBtn').addEventListener('click', function() {
+    var state = readFormState();
+    pushStateToURL(state);
+    var fullUrl = window.location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullUrl).then(function() {
+        setStatus('Link copied to clipboard!', false);
+        setTimeout(function() { setStatus('', false); }, 2500);
+      });
+    } else {
+      // Fallback for older browsers
+      var ta = document.createElement('textarea');
+      ta.value = fullUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setStatus('Link copied to clipboard!', false);
+      setTimeout(function() { setStatus('', false); }, 2500);
+    }
+  });
+
+  // ── Init: load URL params, apply defaults, auto-search if params present ──
+  (function init() {
+    var params  = new URLSearchParams(window.location.search);
+    var hasState = params.toString().length > 0;
+
+    if (hasState) {
+      applyFormState(paramsToState(params));
+    } else {
+      applyDefaultDates();
+    }
+
+    if (hasState) {
+      // Small delay so Leaflet finishes initialising before we pan/zoom
+      setTimeout(function() { searchBtn.click(); }, 300);
+    }
+  })();</script>
+</body>
+</html>
